@@ -1,0 +1,6 @@
+<div class="calculator">
+  <input type="text" [(ngModel)]="display" readonly />
+  <div class="buttons">
+    <button *ngFor="let btn of buttons" (click)="onButtonClick(btn)">{{ btn }}</button>
+  </div>
+</div>
