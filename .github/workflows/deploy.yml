@@ -1,0 +1,50 @@
+name: Deploy EC2 with Terraform
+
+on:
+  workflow_dispatch:
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: latest
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Initialize Terraform
+        run: terraform init
+        working-directory: ./terraform
+
+      - name: Plan Terraform
+        run: terraform plan
+        working-directory: ./terraform
+        
+
+      - name: Apply Terraform
+        id: apply
+        run: terraform apply -auto-approve
+        working-directory: ./terraform
+
+      - name: checking statefile
+        run: terraform state list
+
+      - name: Fetching public ip of the ec2 instance
+        run : terraform output -raw instance_public_ip
+
+
+
+
+      
+
