@@ -42,9 +42,11 @@ jobs:
 
       - name: checking statefile
         run: terraform state list
+        working-directory: ./terraform
 
       - name: Fetching public ip of the ec2 instance
         run : terraform output -raw instance_public_ip
+        working-directory: ./terraform
 
 
 
