@@ -8,7 +8,7 @@ resource "aws_instance" "calculatorAngular" {
   key_name      = "angular" # Your actual AWS key pair
 
   # Attach existing security group
-  vpc_security_group_ids = ["sg-0b6450d582b178cc2"] # Your actual Security Group ID
+  vpc_security_group_ids = ["sg-032789747ef521238"] # Your actual Security Group ID
   
   associate_public_ip_address = true # Add this line
 
