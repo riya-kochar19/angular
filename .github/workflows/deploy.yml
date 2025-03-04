@@ -65,7 +65,7 @@ jobs:
             fi
             # Clone the repository
             cd ~
-            if [ ! -d "deployAngularApplication" ]; then
+            if [ ! -d "angular" ]; then
               git clone https://github.com/riya-kochar19/angular.git
             fi
             cd angular
