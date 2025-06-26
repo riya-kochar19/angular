@@ -1,9 +1,4 @@
 #!/usr/bin/env sh
-. "$(dirname "$0")/_/husky.sh"
+. "$(dirname -- "$0")/_/husky.sh"
 
-echo "✅ pre-commit hook triggered"
-echo "📦 Staged files:"
-git diff --cached --name-only
-
-echo "🧪 Running lint-staged..."
-npx lint-staged --debug
+npx lint-staged
