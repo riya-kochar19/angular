@@ -70,24 +70,10 @@ jobs:
             sudo usermod -aG docker ec2-user
             sudo chmod 666 /var/run/docker.sock
 
-  node:
-    runs-on: ubuntu-latest
-    needs: install
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      
-      - name: Use temporary npm registry mirror
-        run: npm config set registry https://registry.npmmirror.com
-
+  
   build:
     runs-on: ubuntu-latest
-    needs: node
+    needs: install
     steps:
       - name: SSH into EC2 and deploy frontend services
         uses: appleboy/ssh-action@master
@@ -112,7 +98,7 @@ jobs:
             cd /home/${{ secrets.EC2_USER }}/angular
             
             echo "Building Docker image..."
-            sudo docker build -t calculator-app-image .
+            sudo docker build -t calculator-app .
 
   deploy:
     runs-on: ubuntu-latest
