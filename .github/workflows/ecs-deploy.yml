@@ -1,0 +1,151 @@
+name: Deploy on ECS
+
+on:
+  push:
+    branches:
+      - feat/ecs
+jobs:
+  generate-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.set_tag.outputs.tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Generate git commit short SHA as tag
+        id: set_tag
+        run: |
+          GIT_SHORT_SHA=$(git rev-parse --short HEAD)
+          echo "Generated tag from commit: $GIT_SHORT_SHA"
+          echo "tag=$GIT_SHORT_SHA" >> $GITHUB_OUTPUT
+
+  terraform:
+    runs-on: ubuntu-latest
+    needs: generate-tag
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: latest
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-3
+     
+      - name: Initialize Terraform
+        run: terraform init
+        working-directory: ./terraform
+
+      - name: Plan Terraform
+        run: terraform plan -var="image_tag=${{ needs.generate-tag.outputs.tag }}"
+        working-directory: ./terraform
+
+      - name: Apply Terraform
+        run: terraform apply -var="image_tag=${{ needs.generate-tag.outputs.tag }}" -auto-approve
+        working-directory: ./terraform
+        continue-on-error: true
+
+  install:
+    runs-on: ubuntu-latest
+    needs: terraform
+    steps:
+      - name: SSH into EC2 and install dependencies
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          script: |
+            sudo yum update -y
+            sudo yum install -y docker git
+            sudo systemctl start docker
+            sudo systemctl enable docker
+            sudo usermod -aG docker ec2-user
+            sudo chmod 666 /var/run/docker.sock
+
+  node:
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      
+      - name: Use temporary npm registry mirror
+        run: npm config set registry https://registry.npmmirror.com
+
+  build:
+    runs-on: ubuntu-latest
+    needs: node
+    steps:
+      - name: SSH into EC2 and deploy frontend services
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          script: |
+            git config --global --add safe.directory /home/${{ secrets.UAT_EC2_USER }}/angular
+
+            if [ -d "/home/${{ secrets.EC2_USER }}/angular" ]; then
+              cd /home/${{ secrets.EC2_USER }}/angular
+              
+              git config pull.rebase false
+              git checkout feat/ecs
+              git fetch origin feat/ecs
+              git reset --hard origin/feat/ecs
+            else
+              git clone -b feat/ecs https://${{ secrets.PAT_GITHUB }}@github.com/riya-kochar19/angular.git /home/${{ secrets.EC2_USER }}/angular
+            fi
+
+            cd /home/${{ secrets.EC2_USER }}/angular
+            
+            echo "Building Docker image..."
+            sudo docker build -t calculator-app-image .
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [build, generate-tag]
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-3
+
+      - name: SSH into EC2 and push images to ECR
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          script: |
+            TAG=${{ needs.generate-tag.outputs.tag }}
+            echo "Generated tag: $TAG"
+            ECR_URL=890742579135.dkr.ecr.ap-northeast-3.amazonaws.com
+
+            echo "Logging into ECR..."
+            aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin $ECR_URL
+
+            echo "Tagging and pushing Docker images..."
+            docker tag calculator-app:latest $ECR_URL/calculator-app:$TAG
+            docker push $ECR_URL/calculator-app:$TAG
+
+            aws sts get-caller-identity
+
+            echo "Triggering ECS deployment..."
+            aws ecs update-service --region ap-northeast-3 --cluster calculator-fargate-cluster --service calculator-app-service --force-new-deployment
+
+            docker system prune -a -f

@@ -1,4 +1,8 @@
-# Output the static Elastic IP
-output "instance_public_ip" {
-  value = aws_eip.angular_eip.public_ip
+output "ecr_repository_url" {
+  value = aws_ecr_repository.calculator_app.repository_url
 }
+
+output "ecs_cluster_name" {
+  value = aws_ecs_cluster.main.name
+}
+
