@@ -31,3 +31,8 @@ variable "ecs_task_exec_role_arn" {
   type        = string
   default     = "arn:aws:iam::890742579135:role/ecsTaskExecutionRole"
 }
+
+variable "image_tag" {
+  description = "The Docker image tag to use for the ECS task"
+  type        = string
+}
