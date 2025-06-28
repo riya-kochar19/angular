@@ -46,7 +46,7 @@ resource "aws_lb_listener" "http" {
 }
 
 resource "aws_ecs_task_definition" "app" {
-  family                   = "my-fargate-task"
+  family                   = "calculator-fargate-task"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = "256"
