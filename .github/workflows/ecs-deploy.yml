@@ -19,6 +19,7 @@ jobs:
           GIT_SHORT_SHA=$(git rev-parse --short HEAD)
           echo "tag=$GIT_SHORT_SHA" >> $GITHUB_OUTPUT
 
+  
   terraform:
     runs-on: ubuntu-latest
     needs: generate-tag
