@@ -20,13 +20,13 @@ jobs:
           echo "tag=$GIT_SHORT_SHA" >> $GITHUB_OUTPUT
 
   terraform:
-  runs-on: ubuntu-latest
-  needs: generate-tag
-  outputs:
-    green_tg_arn: ${{ steps.tf_outputs.outputs.green_tg_arn }}
-    blue_tg_arn: ${{ steps.tf_outputs.outputs.blue_tg_arn }}
-    alb_listener_arn: ${{ steps.tf_outputs.outputs.alb_listener_arn }}
-  steps:
+    runs-on: ubuntu-latest
+    needs: generate-tag
+    outputs:
+      green_tg_arn: ${{ steps.tf_outputs.outputs.green_tg_arn }}
+      blue_tg_arn: ${{ steps.tf_outputs.outputs.blue_tg_arn }}
+      alb_listener_arn: ${{ steps.tf_outputs.outputs.alb_listener_arn }}
+    steps:
     - uses: actions/checkout@v3
 
     - name: Setup Terraform
