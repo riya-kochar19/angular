@@ -18,12 +18,32 @@ resource "aws_lb" "app_alb" {
   subnets            = var.public_subnets
 }
 
-resource "aws_lb_target_group" "app_tg" {
-  name     = "calculator-app-tg"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = var.vpc_id
+# BLUE Target Group
+resource "aws_lb_target_group" "blue" {
+  name        = "calculator-blue-tg"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
   target_type = "ip"
+
+  health_check {
+    path                = "/"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    matcher             = "200"
+  }
+}
+
+# GREEN Target Group
+resource "aws_lb_target_group" "green" {
+  name        = "calculator-green-tg"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
+
   health_check {
     path                = "/"
     interval            = 30
@@ -41,7 +61,7 @@ resource "aws_lb_listener" "http" {
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.app_tg.arn
+    target_group_arn = aws_lb_target_group.blue.arn # initially send traffic to blue
   }
 }
 
@@ -67,8 +87,9 @@ resource "aws_ecs_task_definition" "app" {
   ])
 }
 
-resource "aws_ecs_service" "app" {
-  name            = "calculator-app-service"
+# BLUE Service (live initially)
+resource "aws_ecs_service" "blue" {
+  name            = "calculator-blue"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.app.arn
   launch_type     = "FARGATE"
@@ -81,7 +102,30 @@ resource "aws_ecs_service" "app" {
   }
 
   load_balancer {
-    target_group_arn = aws_lb_target_group.app_tg.arn
+    target_group_arn = aws_lb_target_group.blue.arn
+    container_name   = "calculator-app"
+    container_port   = 80
+  }
+
+  depends_on = [aws_lb_listener.http]
+}
+
+# GREEN Service (initially scaled to 0, used for blue-green testing)
+resource "aws_ecs_service" "green" {
+  name            = "calculator-green"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.app.arn
+  launch_type     = "FARGATE"
+  desired_count   = 0
+
+  network_configuration {
+    subnets          = var.public_subnets
+    security_groups  = [var.ecs_sg]
+    assign_public_ip = true
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.green.arn
     container_name   = "calculator-app"
     container_port   = 80
   }

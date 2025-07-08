@@ -36,3 +36,10 @@ variable "image_tag" {
   description = "The Docker image tag to use for the ECS task"
   type        = string
 }
+
+variable "active_service" {
+  description = "Which service is currently active: blue or green"
+  type        = string
+  default     = "blue"
+}
+

@@ -1,9 +1,9 @@
-name: Deploy on ECS
+name: Deploy on ECS (Blue-Green)
 
 on:
   push:
     branches:
-      - feat/ecs
+      - feat/blue-green
 
 jobs:
   generate-tag:
@@ -11,22 +11,23 @@ jobs:
     outputs:
       tag: ${{ steps.set_tag.outputs.tag }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
       - name: Generate git commit short SHA as tag
         id: set_tag
         run: |
           GIT_SHORT_SHA=$(git rev-parse --short HEAD)
-          echo "Generated tag from commit: $GIT_SHORT_SHA"
           echo "tag=$GIT_SHORT_SHA" >> $GITHUB_OUTPUT
 
   terraform:
     runs-on: ubuntu-latest
     needs: generate-tag
+    outputs:
+      green_tg_arn: ${{ steps.tf_outputs.outputs.green_tg_arn }}
+      blue_tg_arn: ${{ steps.tf_outputs.outputs.blue_tg_arn }}
+      alb_listener_arn: ${{ steps.tf_outputs.outputs.alb_listener_arn }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -39,7 +40,7 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-northeast-3
-     
+
       - name: Initialize Terraform
         run: terraform init
         working-directory: ./terraform
@@ -51,13 +52,20 @@ jobs:
       - name: Apply Terraform
         run: terraform apply -var="image_tag=${{ needs.generate-tag.outputs.tag }}" -auto-approve
         working-directory: ./terraform
-        continue-on-error: true
+
+      - name: Output Terraform values
+        id: tf_outputs
+        run: |
+          echo "green_tg_arn=$(terraform output -raw green_tg_arn)" >> $GITHUB_OUTPUT
+          echo "blue_tg_arn=$(terraform output -raw blue_tg_arn)" >> $GITHUB_OUTPUT
+          echo "alb_listener_arn=$(terraform output -raw alb_listener_arn)" >> $GITHUB_OUTPUT
+        working-directory: ./terraform
 
   install:
     runs-on: ubuntu-latest
     needs: terraform
     steps:
-      - name: SSH into EC2 and install dependencies
+      - name: Install Docker on EC2
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -71,48 +79,11 @@ jobs:
             sudo usermod -aG docker ec2-user
             sudo chmod 666 /var/run/docker.sock
 
-  
-  build:
+  build-push:
     runs-on: ubuntu-latest
-    needs: install
+    needs: [generate-tag, install]
     steps:
-      - name: SSH into EC2 and deploy frontend services
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-          script: |
-            git config --global --add safe.directory /home/${{ secrets.UAT_EC2_USER }}/angular
-
-            if [ -d "/home/${{ secrets.EC2_USER }}/angular" ]; then
-              cd /home/${{ secrets.EC2_USER }}/angular
-              
-              git config pull.rebase false
-              git checkout feat/ecs
-              git fetch origin feat/ecs
-              git reset --hard origin/feat/ecs
-            else
-              git clone -b feat/ecs https://${{ secrets.PAT_GITHUB }}@github.com/riya-kochar19/angular.git /home/${{ secrets.EC2_USER }}/angular
-            fi
-
-            cd /home/${{ secrets.EC2_USER }}/angular
-            
-            echo "Building Docker image..."
-            sudo docker build -t calculator-app .
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: [build, generate-tag]
-    steps:
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-northeast-3
-
-      - name: SSH into EC2 and push images to ECR
+      - name: SSH into EC2 and build & push to ECR
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -120,19 +91,77 @@ jobs:
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           script: |
             TAG=${{ needs.generate-tag.outputs.tag }}
-            echo "Generated tag: $TAG"
             ECR_URL=890742579135.dkr.ecr.ap-northeast-3.amazonaws.com
 
-            echo "Logging into ECR..."
-            aws ecr get-login-password --region ap-northeast-3 | docker login --username AWS --password-stdin $ECR_URL
+            cd /home/${{ secrets.EC2_USER }}/angular || git clone -b feat/blue-green https://${{ secrets.PAT_GITHUB }}@github.com/riya-kochar19/angular.git /home/${{ secrets.EC2_USER }}/angular && cd /home/${{ secrets.EC2_USER }}/angular
+            git fetch origin feat/blue-green && git reset --hard origin/feat/blue-green
 
-            echo "Tagging and pushing Docker images..."
+            docker build -t calculator-app .
+            aws ecr get-login-password --region ap-northeast-3 | docker login --username AWS --password-stdin $ECR_URL
             docker tag calculator-app:latest $ECR_URL/calculator-app:$TAG
             docker push $ECR_URL/calculator-app:$TAG
-
-            aws sts get-caller-identity
-
-            echo "Triggering ECS deployment..."
-            aws ecs update-service --region ap-northeast-3 --cluster calculator-fargate-cluster --service calculator-app-service --force-new-deployment
-
             docker system prune -a -f
+
+  deploy-green:
+    runs-on: ubuntu-latest
+    needs: [build-push]
+    steps:
+      - name: Deploy Green Service
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-3
+      - run: |
+          aws ecs update-service \
+            --cluster calculator-fargate-cluster \
+            --service calculator-green \
+            --force-new-deployment
+
+  health-check:
+    runs-on: ubuntu-latest
+    needs: deploy-green
+    outputs:
+      healthy: ${{ steps.check.outputs.healthy }}
+    steps:
+      - name: Check Health of Green Service
+        id: check
+        run: |
+          GREEN_IP=$(aws elbv2 describe-target-health \
+            --target-group-arn ${{ needs.terraform.outputs.green_tg_arn }} \
+            --query 'TargetHealthDescriptions[0].Target.Id' --output text)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$GREEN_IP)
+          echo "Green service HTTP status: $STATUS"
+          [[ "$STATUS" == "200" ]] && echo "healthy=true" >> $GITHUB_OUTPUT || echo "healthy=false" >> $GITHUB_OUTPUT
+
+  switch-traffic:
+    runs-on: ubuntu-latest
+    needs: [health-check, terraform]
+    if: needs.health-check.outputs.healthy == 'true'
+    steps:
+      - name: Switch ALB Traffic to Green
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-3
+      - run: |
+          TG_ARN=${{ needs.terraform.outputs.green_tg_arn }}
+          LISTENER=${{ needs.terraform.outputs.alb_listener_arn }}
+          aws elbv2 modify-listener --listener-arn $LISTENER --default-actions Type=forward,TargetGroupArn=$TG_ARN
+
+  rollback:
+    runs-on: ubuntu-latest
+    needs: [health-check, terraform]
+    if: needs.health-check.outputs.healthy != 'true'
+    steps:
+      - name: Rollback to Blue
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-3
+      - run: |
+          TG_ARN=${{ needs.terraform.outputs.blue_tg_arn }}
+          LISTENER=${{ needs.terraform.outputs.alb_listener_arn }}
+          aws elbv2 modify-listener --listener-arn $LISTENER --default-actions Type=forward,TargetGroupArn=$TG_ARN
