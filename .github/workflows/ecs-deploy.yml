@@ -60,6 +60,8 @@ jobs:
         echo "green_tg_arn=$(terraform output -raw green_tg_arn)" >> $GITHUB_OUTPUT
         echo "blue_tg_arn=$(terraform output -raw blue_tg_arn)" >> $GITHUB_OUTPUT
         echo "alb_listener_arn=$(terraform output -raw alb_listener_arn)" >> $GITHUB_OUTPUT
+        echo "alb_dns_name=$(terraform output -raw alb_dns_name)" >> $GITHUB_OUTPUT
+
       working-directory: ./terraform
 
   
@@ -135,7 +137,7 @@ jobs:
       - name: Check Health of Green Service
         id: check
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.GREEN_LB_DNS }})
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ needs.terraform.outputs.alb_dns_name }})
           echo "Green service HTTP status: $STATUS"
           [[ "$STATUS" == "200" ]] && echo "healthy=true" >> $GITHUB_OUTPUT || echo "healthy=false" >> $GITHUB_OUTPUT
 
