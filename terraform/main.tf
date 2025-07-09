@@ -144,6 +144,7 @@ resource "aws_ecs_service" "green" {
     container_port   = 80
   }
   
+  
   lifecycle {
     ignore_changes = [desired_count]  
   }
