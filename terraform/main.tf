@@ -107,7 +107,7 @@ resource "aws_ecs_task_definition" "blue" {
 
   container_definitions = jsonencode([{
     name      = "calculator-app"
-    image     = "${aws_ecr_repository.my_app.repository_url}:stable" # ← pinned tag
+    image     = "${aws_ecr_repository.my_app.repository_url}:stable" 
     portMappings = [{
       containerPort = 80
       protocol      = "tcp"
