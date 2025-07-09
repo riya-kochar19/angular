@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - feat/blue-green
-
 jobs:
   generate-tag:
     runs-on: ubuntu-latest
