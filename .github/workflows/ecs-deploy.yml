@@ -49,10 +49,6 @@ jobs:
       run: terraform plan -var="image_tag=${{ needs.generate-tag.outputs.tag }}"
       working-directory: ./terraform
 
-    - name: Remove old target group from state
-      run: terraform state rm aws_lb_target_group.app_tg || echo "Already removed"
-      working-directory: ./terraform
-
     - name: Apply Terraform
       run: terraform apply -var="image_tag=${{ needs.generate-tag.outputs.tag }}" -auto-approve
       working-directory: ./terraform
