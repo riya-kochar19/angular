@@ -115,7 +115,6 @@ resource "aws_ecs_task_definition" "blue" {
   }])
 }
 
-
 resource "aws_ecs_service" "blue" {
   name            = "calculator-blue"
   cluster         = aws_ecs_cluster.main.id
