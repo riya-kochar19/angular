@@ -135,10 +135,7 @@ jobs:
       - name: Check Health of Green Service
         id: check
         run: |
-          GREEN_IP=$(aws elbv2 describe-target-health \
-            --target-group-arn ${{ needs.terraform.outputs.green_tg_arn }} \
-            --query 'TargetHealthDescriptions[0].Target.Id' --output text)
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$GREEN_IP)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.GREEN_LB_DNS }})
           echo "Green service HTTP status: $STATUS"
           [[ "$STATUS" == "200" ]] && echo "healthy=true" >> $GITHUB_OUTPUT || echo "healthy=false" >> $GITHUB_OUTPUT
 
