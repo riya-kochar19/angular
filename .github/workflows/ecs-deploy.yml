@@ -50,6 +50,7 @@ jobs:
       working-directory: ./terraform
 
     - name: Apply Terraform
+      id: apply
       run: terraform apply -var="image_tag=${{ needs.generate-tag.outputs.tag }}" -auto-approve
       working-directory: ./terraform
 
