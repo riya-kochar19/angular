@@ -134,12 +134,18 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-northeast-3
+      - name: Debug ALB DNS
+        run: |
+          echo "DNS received from Terraform: ${{ needs.terraform.outputs.alb_dns_name }}"    
+      
       - name: Check Health of Green Service
         id: check
         run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ needs.terraform.outputs.alb_dns_name }})
           echo "Green service HTTP status: $STATUS"
           [[ "$STATUS" == "200" ]] && echo "healthy=true" >> $GITHUB_OUTPUT || echo "healthy=false" >> $GITHUB_OUTPUT
+      
+    
 
   switch-traffic:
     runs-on: ubuntu-latest
