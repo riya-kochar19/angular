@@ -18,7 +18,6 @@ resource "aws_lb" "app_alb" {
   subnets            = var.public_subnets
 }
 
-# BLUE Target Group
 resource "aws_lb_target_group" "blue" {
   name        = "calculator-blue-tg"
   port        = 80
@@ -36,7 +35,6 @@ resource "aws_lb_target_group" "blue" {
   }
 }
 
-# GREEN Target Group
 resource "aws_lb_target_group" "green" {
   name        = "calculator-green-tg"
   port        = 80
@@ -54,6 +52,7 @@ resource "aws_lb_target_group" "green" {
   }
 }
 
+# Listener initially points to blue (GitHub Actions will switch later)
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.app_alb.arn
   port              = 80
@@ -61,22 +60,7 @@ resource "aws_lb_listener" "http" {
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.blue.arn # initially send traffic to blue
-  }
-}
-resource "aws_lb_listener_rule" "green_rule" {
-  listener_arn = aws_lb_listener.http.arn
-  priority     = 100
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.green.arn
-  }
-
-  condition {
-    path_pattern {
-      values = ["/*"]
-    }
+    target_group_arn = aws_lb_target_group.blue.arn
   }
 }
 
@@ -96,14 +80,13 @@ resource "aws_ecs_task_definition" "app" {
       portMappings = [
         {
           containerPort = 80
-          protocol       = "tcp"
+          protocol      = "tcp"
         }
       ]
     }
   ])
 }
 
-# BLUE Service (live initially)
 resource "aws_ecs_service" "blue" {
   name            = "calculator-blue"
   cluster         = aws_ecs_cluster.main.id
@@ -126,7 +109,6 @@ resource "aws_ecs_service" "blue" {
   depends_on = [aws_lb_listener.http]
 }
 
-# GREEN Service (initially scaled to 0, used for blue-green testing)
 resource "aws_ecs_service" "green" {
   name            = "calculator-green"
   cluster         = aws_ecs_cluster.main.id

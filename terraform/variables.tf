@@ -37,9 +37,6 @@ variable "image_tag" {
   type        = string
 }
 
-variable "active_service" {
-  description = "Which service is currently active: blue or green"
-  type        = string
-  default     = "blue"
-}
+
+
 
