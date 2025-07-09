@@ -79,34 +79,47 @@ resource "aws_lb_listener_rule" "green" {
   }
 }
 
-
-
-resource "aws_ecs_task_definition" "app" {
-  family                   = "calculator-fargate-task"
+resource "aws_ecs_task_definition" "green" {
+  family                   = "calculator-green-task"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = "256"
   memory                   = "512"
   execution_role_arn       = var.ecs_task_exec_role_arn
 
-  container_definitions = jsonencode([
-    {
-      name      = "calculator-app"
-      image     = "${aws_ecr_repository.my_app.repository_url}:${var.image_tag}"
-      portMappings = [
-        {
-          containerPort = 80
-          protocol      = "tcp"
-        }
-      ]
-    }
-  ])
+  container_definitions = jsonencode([{
+    name      = "calculator-app"
+    image     = "${aws_ecr_repository.my_app.repository_url}:${var.image_tag}" # ← dynamic tag
+    portMappings = [{
+      containerPort = 80
+      protocol      = "tcp"
+    }]
+  }])
 }
+
+resource "aws_ecs_task_definition" "blue" {
+  family                   = "calculator-blue-task"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = "256"
+  memory                   = "512"
+  execution_role_arn       = var.ecs_task_exec_role_arn
+
+  container_definitions = jsonencode([{
+    name      = "calculator-app"
+    image     = "${aws_ecr_repository.my_app.repository_url}:stable" # ← pinned tag
+    portMappings = [{
+      containerPort = 80
+      protocol      = "tcp"
+    }]
+  }])
+}
+
 
 resource "aws_ecs_service" "blue" {
   name            = "calculator-blue"
   cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.app.arn
+  task_definition = aws_ecs_task_definition.blue.arn
   launch_type     = "FARGATE"
   desired_count   = 1
 
@@ -128,7 +141,7 @@ resource "aws_ecs_service" "blue" {
 resource "aws_ecs_service" "green" {
   name            = "calculator-green"
   cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.app.arn
+  task_definition = aws_ecs_task_definition.green.arn
   launch_type     = "FARGATE"
   desired_count   = 1
 
