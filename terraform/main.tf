@@ -130,7 +130,7 @@ resource "aws_ecs_service" "green" {
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.app.arn
   launch_type     = "FARGATE"
-  desired_count   = 0
+  desired_count   = 1
 
   network_configuration {
     subnets          = var.public_subnets
