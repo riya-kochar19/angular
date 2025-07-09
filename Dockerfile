@@ -5,7 +5,6 @@ COPY package*.json ./
 RUN npm install
 COPY . .
 RUN npm run build
-
 # Step 2: Serve with Nginx
 FROM nginx:alpine
 COPY --from=build-stage /app/dist/calculator-app /usr/share/nginx/html
