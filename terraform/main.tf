@@ -127,6 +127,10 @@ resource "aws_ecs_service" "green" {
     container_name   = "calculator-app"
     container_port   = 80
   }
+  
+  lifecycle {
+    ignore_changes = [desired_count]  
+  }
 
   depends_on = [aws_lb_listener.http]
 }
