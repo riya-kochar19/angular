@@ -46,7 +46,7 @@ resource "aws_lb_listener" "http" {
 }
 resource "aws_cloudwatch_log_group" "ecs_logs" {
   name              = "/ecs/calculator-app"
-  retention_in_days =20
+  retention_in_days =7
 }
 
 resource "aws_ecs_task_definition" "app" {
