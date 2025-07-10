@@ -44,6 +44,10 @@ resource "aws_lb_listener" "http" {
     target_group_arn = aws_lb_target_group.app_tg.arn
   }
 }
+resource "aws_cloudwatch_log_group" "ecs_logs" {
+  name              = "/ecs/calculator-app"
+  retention_in_days =20
+}
 
 resource "aws_ecs_task_definition" "app" {
   family                   = "my-fargate-task"
@@ -63,6 +67,14 @@ resource "aws_ecs_task_definition" "app" {
           protocol       = "tcp"
         }
       ]
+      logConfiguration = {
+    logDriver = "awslogs"
+    options = {
+      awslogs-group         = "/ecs/calculator-app"
+      awslogs-region        = var.region
+      awslogs-stream-prefix = "ecs"
+    }
+  }
     }
   ])
 }
