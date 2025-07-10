@@ -26,13 +26,14 @@ resource "aws_lb_target_group" "blue" {
   target_type = "ip"
 
   health_check {
-    path                = "/"
-    interval            = 30
-    timeout             = 5
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    matcher             = "200"
-  }
+  path                = "/health"
+  matcher             = "200"
+  interval            = 30
+  timeout             = 5
+  healthy_threshold   = 2
+  unhealthy_threshold = 2
+}
+
 }
 
 resource "aws_lb_target_group" "green" {
@@ -42,14 +43,14 @@ resource "aws_lb_target_group" "green" {
   vpc_id      = var.vpc_id
   target_type = "ip"
 
-  health_check {
-    path                = "/"
-    interval            = 30
-    timeout             = 5
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    matcher             = "200"
-  }
+   health_check {
+  path                = "/health"
+  matcher             = "200"
+  interval            = 30
+  timeout             = 5
+  healthy_threshold   = 2
+  unhealthy_threshold = 2
+}
 }
 
 # Listener initially points to blue (GitHub Actions will switch later)
