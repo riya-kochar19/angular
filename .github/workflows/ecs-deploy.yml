@@ -141,7 +141,7 @@ jobs:
       - name: Check Health of Green Service
         id: check
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ needs.terraform.outputs.alb_dns_name }})
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ needs.terraform.outputs.alb_dns_name }}/green)
           echo "Green service HTTP status: $STATUS"
           [[ "$STATUS" == "200" ]] && echo "healthy=true" >> $GITHUB_OUTPUT || echo "healthy=false" >> $GITHUB_OUTPUT
       

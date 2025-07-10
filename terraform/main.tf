@@ -26,7 +26,7 @@ resource "aws_lb_target_group" "blue" {
   target_type = "ip"
 
   health_check {
-  path                = "/health"
+  path                = "/missing.html"
   matcher             = "200"
   interval            = 30
   timeout             = 5
@@ -44,7 +44,7 @@ resource "aws_lb_target_group" "green" {
   target_type = "ip"
 
    health_check {
-  path                = "/health"
+  path                = "/missing.html"
   matcher             = "200"
   interval            = 30
   timeout             = 5
