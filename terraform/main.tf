@@ -50,7 +50,7 @@ resource "aws_cloudwatch_log_group" "ecs_logs" {
 }
 
 resource "aws_ecs_task_definition" "app" {
-  family                   = "my-fargate-task"
+  family                   = "calculator-fargate-task"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = "256"
