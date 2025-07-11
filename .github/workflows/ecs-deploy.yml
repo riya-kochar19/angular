@@ -124,20 +124,30 @@ jobs:
       - name: Register ECS Task Definition and Deploy via CodeDeploy
         run: |
           export IMAGE_URI=890742579135.dkr.ecr.ap-northeast-3.amazonaws.com/calculator-app:${{ needs.generate-tag.outputs.tag }}
-          export EXEC_ROLE_ARN=${{ secrets.ECS_TASK_EXEC_ROLE_ARN }}
+          export EXEC_ROLE_ARN=${{ secrets.ECS_TASK_EXEC_ROLE }}
 
+          # Substitute variables in taskdef.json
           TASK_DEF_JSON=$(envsubst < taskdef.json)
           echo "$TASK_DEF_JSON" > rendered-taskdef.json
 
+          # Register task definition and extract ARN
           TASK_DEF_ARN=$(aws ecs register-task-definition \
             --cli-input-json file://rendered-taskdef.json \
             --query "taskDefinition.taskDefinitionArn" \
             --output text)
 
+          echo "TASK_DEF_ARN=$TASK_DEF_ARN"
+
+          # Substitute into appspec
+          export TASK_DEF_ARN=$TASK_DEF_ARN
+          envsubst < appspec.yaml > rendered-appspec.yaml
+
+          # Create deployment using rendered appspec.yaml
           aws deploy create-deployment \
             --application-name calculator-codedeploy-app \
             --deployment-group-name calculator-deploy-group \
-            --revision file://appspec.yaml \
+            --deployment-config-name CodeDeployDefault.ECSAllAtOnce \
+            --revision revisionType=AppSpecContent,appSpecContent={content="$(cat rendered-appspec.yaml | base64 | tr -d '\n')"} \
             --description "Blue-Green Deploy via GitHub Actions"
 
 
