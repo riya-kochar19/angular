@@ -140,7 +140,6 @@ jobs:
             --description "Blue-Green Deploy via GitHub Actions" \
             --task-definition "$TASK_DEF_ARN"
 
-  
   health-check:
     runs-on: ubuntu-latest
     needs: [codedeploy-deploy, terraform] 
