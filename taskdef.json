@@ -1,0 +1,28 @@
+{
+  "family": "calculator-fargate-task",
+  "networkMode": "awsvpc",
+  "executionRoleArn": "${EXEC_ROLE_ARN}",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "containerDefinitions": [
+    {
+      "name": "calculator-app",
+      "image": "${IMAGE_URI}",
+      "portMappings": [
+        {
+          "containerPort": 80,
+          "protocol": "tcp"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/calculator-app",
+          "awslogs-region": "ap-northeast-3",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}
