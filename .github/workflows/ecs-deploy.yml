@@ -107,25 +107,42 @@ jobs:
             docker push $ECR_URL/calculator-app:$TAG
             docker system prune -a -f
 
-  deploy-green:
-    runs-on: ubuntu-latest
-    needs: [build-push]
-    steps:
-      - name: Deploy Green Service
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-northeast-3
-      - run: |
-          aws ecs update-service \
-            --cluster calculator-fargate-cluster \
-            --service calculator-green \
-            --force-new-deployment
+codedeploy-deploy:
+  runs-on: ubuntu-latest
+  needs: [build-push, terraform]
+  steps:
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ap-northeast-3
+
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Register ECS Task Definition and Deploy via CodeDeploy
+      run: |
+        TASK_DEF_JSON=$(envsubst < taskdef.json)
+        echo "$TASK_DEF_JSON" > rendered-taskdef.json
+
+        TASK_DEF_ARN=$(aws ecs register-task-definition \
+          --cli-input-json file://rendered-taskdef.json \
+          --query "taskDefinition.taskDefinitionArn" \
+          --output text)
+
+        aws deploy create-deployment \
+          --application-name calculator-codedeploy-app \
+          --deployment-group-name calculator-deploy-group \
+          --deployment-config-name CodeDeployDefault.ECSAllAtOnce \
+          --revision file://appspec.yaml \
+          --deployment-style deploymentType=BLUE_GREEN,deploymentOption=WITH_TRAFFIC_CONTROL \
+          --description "Blue-Green Deploy via GitHub Actions" \
+          --task-definition "$TASK_DEF_ARN"
 
   health-check:
     runs-on: ubuntu-latest
-    needs: [deploy-green, terraform] 
+    needs: [codedeploy-deploy, terraform] 
     outputs:
       healthy: ${{ steps.check.outputs.healthy }}
     steps:
@@ -145,36 +162,3 @@ jobs:
           echo "Green service HTTP status: $STATUS"
           [[ "$STATUS" == "200" ]] && echo "healthy=true" >> $GITHUB_OUTPUT || echo "healthy=false" >> $GITHUB_OUTPUT
       
-    
-
-  switch-traffic:
-    runs-on: ubuntu-latest
-    needs: [health-check, terraform]
-    if: needs.health-check.outputs.healthy == 'true'
-    steps:
-      - name: Switch ALB Traffic to Green
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-northeast-3
-      - run: |
-          TG_ARN=${{ needs.terraform.outputs.green_tg_arn }}
-          LISTENER=${{ needs.terraform.outputs.alb_listener_arn }}
-          aws elbv2 modify-listener --listener-arn $LISTENER --default-actions Type=forward,TargetGroupArn=$TG_ARN
-
-  rollback:
-    runs-on: ubuntu-latest
-    needs: [health-check, terraform]
-    if: needs.health-check.outputs.healthy != 'true'
-    steps:
-      - name: Rollback to Blue
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-northeast-3
-      - run: |
-          TG_ARN=${{ needs.terraform.outputs.blue_tg_arn }}
-          LISTENER=${{ needs.terraform.outputs.alb_listener_arn }}
-          aws elbv2 modify-listener --listener-arn $LISTENER --default-actions Type=forward,TargetGroupArn=$TG_ARN
