@@ -137,11 +137,9 @@ jobs:
           aws deploy create-deployment \
             --application-name calculator-codedeploy-app \
             --deployment-group-name calculator-deploy-group \
-            --deployment-config-name CodeDeployDefault.ECSAllAtOnce \
             --revision file://appspec.yaml \
-            --deployment-style deploymentType=BLUE_GREEN,deploymentOption=WITH_TRAFFIC_CONTROL \
-            --description "Blue-Green Deploy via GitHub Actions" \
-            --task-definition "$TASK_DEF_ARN"
+            --description "Blue-Green Deploy via GitHub Actions"
+
 
 
   health-check:
