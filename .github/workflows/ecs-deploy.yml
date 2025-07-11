@@ -122,7 +122,8 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Debug tag value
-        run: echo "Tag to be used: ${{ needs.generate-tag.outputs.tag }}"
+        run: |
+          echo "Tag to be used: ${{ needs.generate-tag.outputs.tag }}"
   
 
       - name: Register ECS Task Definition and Deploy via CodeDeploy
